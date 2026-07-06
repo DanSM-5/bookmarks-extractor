@@ -13,9 +13,10 @@ import (
 type Browser string
 
 const (
-  Chrome Browser = "chrome"
-  Brave  Browser = "brave"
-  Edge   Browser = "edge"
+  Chrome   Browser = "chrome"
+  Chromium Browser = "chromium"
+  Brave    Browser = "brave"
+  Edge     Browser = "edge"
 )
 
 // UserDataDir returns the browser's root profile directory for the current OS.
@@ -34,6 +35,8 @@ func UserDataDir(b Browser) (string, error) {
     switch b {
     case Chrome:
       return filepath.Join(base, "Google", "Chrome", "User Data"), nil
+    case Chromium:
+      return filepath.Join(base, "Chromium", "User Data"), nil
     case Brave:
       return filepath.Join(base, "BraveSoftware", "Brave-Browser", "User Data"), nil
     case Edge:
@@ -44,6 +47,8 @@ func UserDataDir(b Browser) (string, error) {
     switch b {
     case Chrome:
       return filepath.Join(base, "Google", "Chrome"), nil
+    case Chromium:
+      return filepath.Join(base, "Chromium"), nil
     case Brave:
       return filepath.Join(base, "BraveSoftware", "Brave-Browser"), nil
     case Edge:
@@ -54,6 +59,8 @@ func UserDataDir(b Browser) (string, error) {
     switch b {
     case Chrome:
       return filepath.Join(base, "google-chrome"), nil
+    case Chromium:
+      return filepath.Join(base, "chromium"), nil
     case Brave:
       return filepath.Join(base, "BraveSoftware", "Brave-Browser"), nil
     case Edge:
@@ -70,6 +77,12 @@ func ListProfiles(b Browser) ([]string, error) {
   if err != nil {
     return nil, err
   }
+  return ListProfilesAt(dir)
+}
+
+// ListProfilesAt returns the profile directory names under an arbitrary
+// Chromium-style user-data directory (e.g. a custom install location).
+func ListProfilesAt(dir string) ([]string, error) {
   entries, err := os.ReadDir(dir)
   if err != nil {
     return nil, fmt.Errorf("reading user data dir %q: %w", dir, err)

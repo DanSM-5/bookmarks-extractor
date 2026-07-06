@@ -9,7 +9,17 @@ import (
   "strings"
 )
 
-// Profile is one entry from Firefox's profiles.ini.
+// Product identifies a specific Gecko-based browser. They all share the
+// same profiles.ini + places.sqlite layout, so only the root directory
+// differs.
+type Product string
+
+const (
+  Firefox   Product = "firefox"
+  LibreWolf Product = "librewolf"
+)
+
+// Profile is one entry from a product's profiles.ini.
 type Profile struct {
   Name    string
   Path    string // absolute path to the profile directory
@@ -17,8 +27,8 @@ type Profile struct {
 }
 
 // RootDir returns the directory containing profiles.ini and the profile
-// folders for the current OS.
-func RootDir() (string, error) {
+// folders for the given product on the current OS.
+func RootDir(p Product) (string, error) {
   home, err := os.UserHomeDir()
   if err != nil {
     return "", err
@@ -30,21 +40,44 @@ func RootDir() (string, error) {
     if base == "" {
       base = filepath.Join(home, "AppData", "Roaming")
     }
-    return filepath.Join(base, "Mozilla", "Firefox"), nil
+    switch p {
+    case Firefox:
+      return filepath.Join(base, "Mozilla", "Firefox"), nil
+    case LibreWolf:
+      return filepath.Join(base, "librewolf"), nil
+    }
   case "darwin":
-    return filepath.Join(home, "Library", "Application Support", "Firefox"), nil
-  default:
-    return filepath.Join(home, ".mozilla", "firefox"), nil
+    base := filepath.Join(home, "Library", "Application Support")
+    switch p {
+    case Firefox:
+      return filepath.Join(base, "Firefox"), nil
+    case LibreWolf:
+      return filepath.Join(base, "librewolf"), nil
+    }
+  default: // linux and other unix-likes
+    switch p {
+    case Firefox:
+      return filepath.Join(home, ".mozilla", "firefox"), nil
+    case LibreWolf:
+      return filepath.Join(home, ".librewolf"), nil
+    }
   }
+  return "", fmt.Errorf("unsupported product: %s", p)
 }
 
-// ListProfiles parses profiles.ini and returns all declared profiles with
-// paths resolved to absolute.
-func ListProfiles() ([]Profile, error) {
-  root, err := RootDir()
+// ListProfiles parses profiles.ini for the given product and returns all
+// declared profiles with paths resolved to absolute.
+func ListProfiles(p Product) ([]Profile, error) {
+  root, err := RootDir(p)
   if err != nil {
     return nil, err
   }
+  return ListProfilesAt(root)
+}
+
+// ListProfilesAt parses profiles.ini under an arbitrary root directory
+// (e.g. a custom install location) and returns all declared profiles.
+func ListProfilesAt(root string) ([]Profile, error) {
   iniPath := filepath.Join(root, "profiles.ini")
   f, err := os.Open(iniPath)
   if err != nil {
@@ -113,15 +146,25 @@ func ListProfiles() ([]Profile, error) {
   return profiles, nil
 }
 
-// DefaultProfile returns the profile marked Default in profiles.ini, or the
-// first profile if none is marked.
-func DefaultProfile() (Profile, error) {
-  profiles, err := ListProfiles()
+// DefaultProfile returns the profile marked Default for the given product,
+// or the first profile if none is marked.
+func DefaultProfile(p Product) (Profile, error) {
+  root, err := RootDir(p)
+  if err != nil {
+    return Profile{}, err
+  }
+  return DefaultProfileAt(root)
+}
+
+// DefaultProfileAt returns the profile marked Default under an arbitrary
+// root directory, or the first profile if none is marked.
+func DefaultProfileAt(root string) (Profile, error) {
+  profiles, err := ListProfilesAt(root)
   if err != nil {
     return Profile{}, err
   }
   if len(profiles) == 0 {
-    return Profile{}, fmt.Errorf("no Firefox profiles found")
+    return Profile{}, fmt.Errorf("no profiles found under %q", root)
   }
   for _, p := range profiles {
     if p.Default {

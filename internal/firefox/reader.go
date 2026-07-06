@@ -42,10 +42,12 @@ type row struct {
   url          sql.NullString
 }
 
-// Read copies the profile's places.sqlite (plus WAL/SHM sidecars, if
+// ReadProfile copies the profile's places.sqlite (plus WAL/SHM sidecars, if
 // present) to a temp directory and parses it into the canonical model.
-// Copying avoids "database is locked" failures while Firefox is running.
-func Read(profilePath string) (*model.Root, error) {
+// Copying avoids "database is locked" failures while the browser is running.
+// It does not set Source/Profile on the result; callers that know the
+// product identity should set those.
+func ReadProfile(profilePath string) (*model.Root, error) {
   tmpDir, err := os.MkdirTemp("", "bookmarks-firefox-*")
   if err != nil {
     return nil, fmt.Errorf("creating temp dir: %w", err)
@@ -66,11 +68,17 @@ func Read(profilePath string) (*model.Root, error) {
     }
   }
 
-  root, err := readDB(tmpDB)
+  return readDB(tmpDB)
+}
+
+// Read parses the given profile for the given product, setting
+// Source/Profile on the result.
+func Read(product Product, profilePath string) (*model.Root, error) {
+  root, err := ReadProfile(profilePath)
   if err != nil {
     return nil, err
   }
-  root.Source = "firefox"
+  root.Source = string(product)
   root.Profile = profilePath
   return root, nil
 }

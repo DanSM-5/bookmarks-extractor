@@ -109,14 +109,20 @@ func firstNonEmpty(vals ...string) string {
   return ""
 }
 
+// ReadAt parses the Bookmarks file for a profile under an arbitrary
+// Chromium-style user-data directory. It does not set Source/Profile on the
+// result; callers that know the browser/profile identity should set those.
+func ReadAt(dir, profile string) (*model.Root, error) {
+  return ReadFile(filepath.Join(dir, profile, "Bookmarks"))
+}
+
 // Read locates and parses the Bookmarks file for the given browser/profile.
 func Read(b Browser, profile string) (*model.Root, error) {
   dir, err := UserDataDir(b)
   if err != nil {
     return nil, err
   }
-  path := filepath.Join(dir, profile, "Bookmarks")
-  root, err := ReadFile(path)
+  root, err := ReadAt(dir, profile)
   if err != nil {
     return nil, err
   }
