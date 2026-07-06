@@ -21,5 +21,6 @@ func newRootCmd() *cobra.Command {
     Short: "Extract, export, and merge browser bookmarks",
   }
   root.AddCommand(newExtractCmd())
+  root.AddCommand(newImportCmd())
   return root
 }

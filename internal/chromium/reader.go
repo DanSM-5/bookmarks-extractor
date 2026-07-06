@@ -4,7 +4,6 @@ import (
   "encoding/json"
   "fmt"
   "os"
-  "path/filepath"
   "strconv"
 
   "bookmarks/internal/model"
@@ -31,9 +30,23 @@ type rawNode struct {
   URL          string    `json:"url"`
 }
 
-// rootOrder controls the order in which known roots are emitted; any
-// unrecognized root keys are appended afterwards.
-var rootOrder = []string{"bookmark_bar", "other", "synced", "mobile"}
+// rootOrder controls the order in which known roots are emitted, and maps
+// each Chromium root key to its canonical Role; any unrecognized root keys
+// are appended afterwards with no Role set.
+//
+// "synced" is the key actually observed in real Chrome/Brave/Edge profiles
+// for the mobile-bookmarks root (its "name" field reads "Mobile
+// bookmarks"); "mobile" is kept as an alias in case older versions or other
+// Chromium forks use that key name instead for the same root.
+var rootOrder = []struct {
+  key  string
+  role model.Role
+}{
+  {"bookmark_bar", model.RoleToolbar},
+  {"other", model.RoleOther},
+  {"synced", model.RoleMobile},
+  {"mobile", model.RoleMobile},
+}
 
 // ReadFile parses a Chromium "Bookmarks" JSON file into the canonical model.
 func ReadFile(path string) (*model.Root, error) {
@@ -47,15 +60,17 @@ func ReadFile(path string) (*model.Root, error) {
     return nil, fmt.Errorf("parsing bookmarks file %q: %w", path, err)
   }
 
-  root := &model.Root{}
+  root := &model.Root{Format: model.FormatChromium}
   seen := map[string]bool{}
-  for _, key := range rootOrder {
-    n, ok := raw.Roots[key]
+  for _, entry := range rootOrder {
+    n, ok := raw.Roots[entry.key]
     if !ok {
       continue
     }
-    seen[key] = true
-    root.Roots = append(root.Roots, convertNode(n, 0))
+    seen[entry.key] = true
+    node := convertNode(n, 0)
+    node.Role = entry.role
+    root.Roots = append(root.Roots, node)
   }
   for key, n := range raw.Roots {
     if seen[key] {
@@ -110,10 +125,16 @@ func firstNonEmpty(vals ...string) string {
 }
 
 // ReadAt parses the Bookmarks file for a profile under an arbitrary
-// Chromium-style user-data directory. It does not set Source/Profile on the
-// result; callers that know the browser/profile identity should set those.
+// Chromium-style user-data directory. profile may be a directory name or a
+// display name (see ResolveProfileDir). It does not set Source/Profile on
+// the result; callers that know the browser/profile identity should set
+// those.
 func ReadAt(dir, profile string) (*model.Root, error) {
-  return ReadFile(filepath.Join(dir, profile, "Bookmarks"))
+  path, err := ResolvePathAt(dir, profile)
+  if err != nil {
+    return nil, err
+  }
+  return ReadFile(path)
 }
 
 // Read locates and parses the Bookmarks file for the given browser/profile.

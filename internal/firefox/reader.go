@@ -30,6 +30,15 @@ var internalGUIDs = map[string]bool{
   "tags________": true,
 }
 
+// rootRoles maps the well-known guids of Firefox's top-level bookmark
+// folders to their canonical Role.
+var rootRoles = map[string]model.Role{
+  "toolbar_____": model.RoleToolbar,
+  "menu________": model.RoleMenu,
+  "unfiled_____": model.RoleOther,
+  "mobile______": model.RoleMobile,
+}
+
 type row struct {
   id           int64
   guid         string
@@ -155,11 +164,12 @@ func readDB(dbPath string) (*model.Root, error) {
     parent.Children = append(parent.Children, nodes[r.id])
   }
 
-  root := &model.Root{}
+  root := &model.Root{Format: model.FormatFirefox}
   for _, child := range nodes[*rootRowID].Children {
     if internalGUIDs[child.ID] {
       continue
     }
+    child.Role = rootRoles[child.ID]
     root.Roots = append(root.Roots, child)
   }
   return root, nil
