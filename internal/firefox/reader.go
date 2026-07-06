@@ -19,24 +19,31 @@ const (
   typeSeparator = 3
 )
 
-// rootGUID is the guid of the synthetic top-level container in
-// moz_bookmarks; its direct children are the real roots (menu, toolbar,
-// unfiled, mobile).
-const rootGUID = "root________"
+// Well-known guids of Firefox's synthetic root containers. guidRoot is the
+// top-level container in moz_bookmarks; its direct children are the real
+// roots (menu, toolbar, unfiled, mobile) plus the internal tags folder.
+const (
+  guidRoot    = "root________"
+  guidMenu    = "menu________"
+  guidToolbar = "toolbar_____"
+  guidUnfiled = "unfiled_____"
+  guidMobile  = "mobile______"
+  guidTags    = "tags________"
+)
 
 // internalGUIDs are Firefox-internal containers that aren't real,
 // user-facing bookmark folders and are excluded from the canonical tree.
 var internalGUIDs = map[string]bool{
-  "tags________": true,
+  guidTags: true,
 }
 
 // rootRoles maps the well-known guids of Firefox's top-level bookmark
 // folders to their canonical Role.
 var rootRoles = map[string]model.Role{
-  "toolbar_____": model.RoleToolbar,
-  "menu________": model.RoleMenu,
-  "unfiled_____": model.RoleOther,
-  "mobile______": model.RoleMobile,
+  guidToolbar: model.RoleToolbar,
+  guidMenu:    model.RoleMenu,
+  guidUnfiled: model.RoleOther,
+  guidMobile:  model.RoleMobile,
 }
 
 type row struct {
@@ -141,7 +148,7 @@ func readDB(dbPath string) (*model.Root, error) {
     }
     nodes[r.id] = n
 
-    if r.guid == rootGUID {
+    if r.guid == guidRoot {
       id := r.id
       rootRowID = &id
     }
@@ -150,7 +157,7 @@ func readDB(dbPath string) (*model.Root, error) {
     return nil, err
   }
   if rootRowID == nil {
-    return nil, fmt.Errorf("could not find root bookmark folder (guid %q)", rootGUID)
+    return nil, fmt.Errorf("could not find root bookmark folder (guid %q)", guidRoot)
   }
 
   for _, r := range all {

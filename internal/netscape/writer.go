@@ -1,11 +1,10 @@
 // Package netscape writes the "Netscape Bookmark File" format: the de
 // facto standard every major browser can import via its own bookmarks UI
-// (Firefox: Bookmarks Library > Import and Backup > Import Bookmarks from
-// HTML File...). It's used as the import path for browsers whose native
-// bookmark storage isn't safe to write directly - Firefox's places.sqlite
-// relies on custom SQLite functions (e.g. for its generated url_hash
-// column) that only exist inside Firefox's own process, so inserting rows
-// with a plain SQLite driver from outside Firefox can fail outright.
+// (Firefox: Import and Backup > Import Bookmarks from HTML File...; Chrome/
+// Brave/Edge: bookmark manager > Import bookmarks). Unlike writing a
+// browser's native storage directly, importing this way merges into
+// whatever bookmarks already exist instead of replacing them, so it's used
+// as the safe default import path.
 package netscape
 
 import (
@@ -19,10 +18,10 @@ import (
 // prettyRootTitles maps the raw internal titles Firefox stores for its
 // special root folders to friendlier display names.
 var prettyRootTitles = map[string]string{
-  "menu":     "Bookmarks Menu",
-  "toolbar":  "Bookmarks Toolbar",
-  "unfiled":  "Other Bookmarks",
-  "mobile":   "Mobile Bookmarks",
+  "menu":    "Bookmarks Menu",
+  "toolbar": "Bookmarks Toolbar",
+  "unfiled": "Other Bookmarks",
+  "mobile":  "Mobile Bookmarks",
 }
 
 // Write emits a Netscape Bookmark File for root to w.
@@ -60,9 +59,8 @@ func writeNode(w io.Writer, n *model.Node, topLevel bool) {
     }
     attr := ""
     if n.Role == model.RoleToolbar {
-      // Recognized by Firefox/Chrome on import: places this folder's
-      // contents directly onto the visible bookmarks bar instead of
-      // nesting them under a generic "Imported" folder.
+      // Recognized by some importers to place a folder's contents
+      // directly onto the visible bookmarks bar; harmless where ignored.
       attr = ` PERSONAL_TOOLBAR_FOLDER="true"`
     }
     fmt.Fprintf(w, "<DT><H3 ADD_DATE=\"%d\" LAST_MODIFIED=\"%d\"%s>%s</H3>\n",
