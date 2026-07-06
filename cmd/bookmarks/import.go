@@ -39,7 +39,7 @@ func newImportCmd() *cobra.Command {
   cmd.Flags().StringVar(&profile, "profile", "",
     "target profile (chromium: directory or display name, e.g. \"Default\" or \"Eduardo Sanchez\"; ignored for firefox-family targets). Defaults to \"Default\"")
   cmd.Flags().StringVar(&input, "input", "", "canonical bookmarks JSON file to import (required)")
-  cmd.Flags().StringVar(&output, "output", "",
+  cmd.Flags().StringVarP(&output, "output", "o", "",
     "where to write the generated file for manual import/restore (defaults next to --input)")
   cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the confirmation prompt when --replace targets a chromium-family browser")
   cmd.Flags().BoolVar(&replace, "replace", false,

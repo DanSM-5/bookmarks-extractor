@@ -51,7 +51,7 @@ func newExtractCmd() *cobra.Command {
     "browser to extract from: firefox, librewolf, chrome, chromium, brave, edge, "+
       "or a path to a custom install/profile location (required)")
   cmd.Flags().StringVar(&profile, "profile", "", "profile name (chromium: directory or display name, e.g. \"Default\" or \"Eduardo Sanchez\"; firefox: profile name from profiles.ini). Defaults to the browser's default profile")
-  cmd.Flags().StringVar(&output, "output", "", "output file path (defaults to stdout)")
+  cmd.Flags().StringVarP(&output, "output", "o", "", "output file path (defaults to stdout)")
   cmd.Flags().BoolVar(&listProfiles, "list-profiles", false, "list available profiles for --browser and exit")
   cmd.MarkFlagRequired("browser")
 
