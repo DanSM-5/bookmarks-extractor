@@ -117,21 +117,27 @@ func runListProfiles(browser string) error {
 }
 
 func printFirefoxProfiles(profiles []firefox.Profile) {
-  for _, p := range profiles {
+  for i, p := range profiles {
+    if i > 0 {
+      fmt.Println()
+    }
     marker := ""
     if p.Default {
       marker = " (default)"
     }
-    fmt.Printf("%s%s\t%s\n", p.Name, marker, p.Path)
+    fmt.Printf("Name: %s%s\n", p.Name, marker)
+    fmt.Printf("Path: %s\n", p.Path)
   }
 }
 
 func printChromiumProfiles(profiles []chromium.ProfileInfo) {
-  for _, p := range profiles {
+  for i, p := range profiles {
+    if i > 0 {
+      fmt.Println()
+    }
+    fmt.Printf("Dir:  %s\n", p.Dir)
     if p.Name != "" {
-      fmt.Printf("%s\t%s\n", p.Dir, p.Name)
-    } else {
-      fmt.Println(p.Dir)
+      fmt.Printf("Name: %s\n", p.Name)
     }
   }
 }
