@@ -154,7 +154,7 @@ func readDB(dbPath string) (*model.Root, error) {
     }
   }
   if err := rows.Err(); err != nil {
-    return nil, err
+    return nil, fmt.Errorf("reading moz_bookmarks rows: %w", err)
   }
   if rootRowID == nil {
     return nil, fmt.Errorf("could not find root bookmark folder (guid %q)", guidRoot)
@@ -185,16 +185,18 @@ func readDB(dbPath string) (*model.Root, error) {
 func copyFile(src, dst string) error {
   in, err := os.Open(src)
   if err != nil {
-    return err
+    return fmt.Errorf("opening %q: %w", src, err)
   }
   defer in.Close()
 
   out, err := os.Create(dst)
   if err != nil {
-    return err
+    return fmt.Errorf("creating %q: %w", dst, err)
   }
   defer out.Close()
 
-  _, err = io.Copy(out, in)
-  return err
+  if _, err := io.Copy(out, in); err != nil {
+    return fmt.Errorf("copying %q to %q: %w", src, dst, err)
+  }
+  return nil
 }

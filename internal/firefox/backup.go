@@ -182,6 +182,8 @@ func WriteBackup(root *model.Root, w io.Writer) ([]string, error) {
   if err != nil {
     return warnings, fmt.Errorf("encoding bookmarks backup: %w", err)
   }
-  _, err = w.Write(data)
-  return warnings, err
+  if _, err := w.Write(data); err != nil {
+    return warnings, fmt.Errorf("writing bookmarks backup: %w", err)
+  }
+  return warnings, nil
 }

@@ -31,7 +31,7 @@ type Profile struct {
 func RootDir(p Product) (string, error) {
   home, err := os.UserHomeDir()
   if err != nil {
-    return "", err
+    return "", fmt.Errorf("determining home directory: %w", err)
   }
 
   switch runtime.GOOS {
@@ -141,7 +141,7 @@ func ListProfilesAt(root string) ([]Profile, error) {
   flush()
 
   if err := scanner.Err(); err != nil {
-    return nil, err
+    return nil, fmt.Errorf("reading %q: %w", iniPath, err)
   }
   return profiles, nil
 }
@@ -172,4 +172,35 @@ func DefaultProfileAt(root string) (Profile, error) {
     }
   }
   return profiles[0], nil
+}
+
+// ResolveProfile resolves a --profile value to a specific profile for the
+// given product: name is matched against profiles.ini profile names, or
+// the default profile is returned if name is empty. It returns a clear
+// error if name doesn't match any known profile, rather than silently
+// falling back to treating it as something else.
+func ResolveProfile(p Product, name string) (Profile, error) {
+  root, err := RootDir(p)
+  if err != nil {
+    return Profile{}, err
+  }
+  return ResolveProfileAt(root, name)
+}
+
+// ResolveProfileAt is ResolveProfile for an arbitrary profiles.ini root
+// directory (e.g. a custom install location).
+func ResolveProfileAt(root, name string) (Profile, error) {
+  if name == "" {
+    return DefaultProfileAt(root)
+  }
+  profiles, err := ListProfilesAt(root)
+  if err != nil {
+    return Profile{}, err
+  }
+  for _, p := range profiles {
+    if p.Name == name {
+      return p, nil
+    }
+  }
+  return Profile{}, fmt.Errorf("no profile named %q found under %q", name, root)
 }

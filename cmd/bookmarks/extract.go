@@ -198,36 +198,24 @@ func runExtract(browser, profile, output string, dryRun bool) error {
   data = append(data, '\n')
 
   if output == "" {
-    _, err = os.Stdout.Write(data)
-    return err
+    if _, err := os.Stdout.Write(data); err != nil {
+      return fmt.Errorf("writing to stdout: %w", err)
+    }
+    return nil
   }
-  return os.WriteFile(output, data, 0o644)
+  if err := os.WriteFile(output, data, 0o644); err != nil {
+    return fmt.Errorf("writing %q: %w", output, err)
+  }
+  return nil
 }
 
 func extractFirefox(product firefox.Product, profile string) (*model.Root, string, error) {
-  var profilePath string
-  if profile == "" {
-    p, err := firefox.DefaultProfile(product)
-    if err != nil {
-      return nil, "", err
-    }
-    profilePath = p.Path
-  } else {
-    if profiles, err := firefox.ListProfiles(product); err == nil {
-      for _, p := range profiles {
-        if p.Name == profile {
-          profilePath = p.Path
-          break
-        }
-      }
-    }
-    if profilePath == "" {
-      // Fall back to treating --profile as a literal path.
-      profilePath = profile
-    }
+  p, err := firefox.ResolveProfile(product, profile)
+  if err != nil {
+    return nil, "", err
   }
-  root, err := firefox.Read(product, profilePath)
-  return root, filepath.Join(profilePath, "places.sqlite"), err
+  root, err := firefox.Read(product, p.Path)
+  return root, filepath.Join(p.Path, "places.sqlite"), err
 }
 
 // extractFromPath handles --browser values that aren't a recognized name:
@@ -273,34 +261,16 @@ func extractFromPath(path, profile string) (*model.Root, string, error) {
     return withCustomSource(root, path), readPath, nil
 
   case kindFirefoxRoot:
-    var profilePath string
-    if profile == "" {
-      p, err := firefox.DefaultProfileAt(path)
-      if err != nil {
-        return nil, "", err
-      }
-      profilePath = p.Path
-    } else {
-      profiles, err := firefox.ListProfilesAt(path)
-      if err != nil {
-        return nil, "", err
-      }
-      for _, p := range profiles {
-        if p.Name == profile {
-          profilePath = p.Path
-          break
-        }
-      }
-      if profilePath == "" {
-        profilePath = filepath.Join(path, profile)
-      }
+    p, err := firefox.ResolveProfileAt(path, profile)
+    if err != nil {
+      return nil, "", err
     }
-    readPath := filepath.Join(profilePath, "places.sqlite")
-    root, err := firefox.ReadProfile(profilePath)
+    readPath := filepath.Join(p.Path, "places.sqlite")
+    root, err := firefox.ReadProfile(p.Path)
     if err != nil {
       return nil, readPath, err
     }
-    return withCustomSource(root, profilePath), readPath, nil
+    return withCustomSource(root, p.Path), readPath, nil
 
   case kindChromiumRoot:
     p := profile

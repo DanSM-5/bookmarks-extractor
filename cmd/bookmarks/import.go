@@ -353,7 +353,7 @@ func confirm(prompt string) (bool, error) {
   fmt.Print("Type \"yes\" to continue: ")
   line, err := bufio.NewReader(os.Stdin).ReadString('\n')
   if err != nil && line == "" {
-    return false, err
+    return false, fmt.Errorf("reading confirmation input: %w", err)
   }
   return strings.TrimSpace(strings.ToLower(line)) == "yes", nil
 }
@@ -361,9 +361,12 @@ func confirm(prompt string) (bool, error) {
 func copyFileTo(src, dst string) error {
   data, err := os.ReadFile(src)
   if err != nil {
-    return err
+    return fmt.Errorf("reading %q: %w", src, err)
   }
-  return os.WriteFile(dst, data, 0o644)
+  if err := os.WriteFile(dst, data, 0o644); err != nil {
+    return fmt.Errorf("writing %q: %w", dst, err)
+  }
+  return nil
 }
 
 func capitalize(s string) string {

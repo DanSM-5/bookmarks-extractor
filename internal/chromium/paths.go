@@ -24,7 +24,7 @@ const (
 func UserDataDir(b Browser) (string, error) {
   home, err := os.UserHomeDir()
   if err != nil {
-    return "", err
+    return "", fmt.Errorf("determining home directory: %w", err)
   }
 
   switch runtime.GOOS {

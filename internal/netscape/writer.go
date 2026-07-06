@@ -24,27 +24,46 @@ var prettyRootTitles = map[string]string{
   "mobile":  "Mobile Bookmarks",
 }
 
+// errWriter wraps an io.Writer and remembers the first error it hits, so
+// callers can fire off a sequence of writes and check for failure once at
+// the end instead of after every single one.
+type errWriter struct {
+  w   io.Writer
+  err error
+}
+
+func (ew *errWriter) printf(format string, args ...any) {
+  if ew.err != nil {
+    return
+  }
+  _, ew.err = fmt.Fprintf(ew.w, format, args...)
+}
+
 // Write emits a Netscape Bookmark File for root to w.
 func Write(root *model.Root, w io.Writer) error {
-  fmt.Fprint(w, "<!DOCTYPE NETSCAPE-Bookmark-file-1>\n")
-  fmt.Fprint(w, "<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n")
-  fmt.Fprint(w, "<TITLE>Bookmarks</TITLE>\n")
-  fmt.Fprint(w, "<H1>Bookmarks</H1>\n")
-  fmt.Fprint(w, "<DL><p>\n")
+  ew := &errWriter{w: w}
+  ew.printf("<!DOCTYPE NETSCAPE-Bookmark-file-1>\n")
+  ew.printf("<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n")
+  ew.printf("<TITLE>Bookmarks</TITLE>\n")
+  ew.printf("<H1>Bookmarks</H1>\n")
+  ew.printf("<DL><p>\n")
   for _, r := range root.Roots {
-    writeNode(w, r, true)
+    writeNode(ew, r, true)
   }
-  fmt.Fprint(w, "</DL><p>\n")
+  ew.printf("</DL><p>\n")
+  if ew.err != nil {
+    return fmt.Errorf("writing bookmarks file: %w", ew.err)
+  }
   return nil
 }
 
-func writeNode(w io.Writer, n *model.Node, topLevel bool) {
+func writeNode(ew *errWriter, n *model.Node, topLevel bool) {
   switch n.Type {
   case model.TypeSeparator:
-    fmt.Fprint(w, "<HR>\n")
+    ew.printf("<HR>\n")
 
   case model.TypeBookmark:
-    fmt.Fprintf(w, "<DT><A HREF=\"%s\" ADD_DATE=\"%d\" LAST_MODIFIED=\"%d\">%s</A>\n",
+    ew.printf("<DT><A HREF=\"%s\" ADD_DATE=\"%d\" LAST_MODIFIED=\"%d\">%s</A>\n",
       html.EscapeString(n.URL),
       millisToUnixSeconds(n.DateAdded),
       millisToUnixSeconds(n.DateModified),
@@ -63,13 +82,13 @@ func writeNode(w io.Writer, n *model.Node, topLevel bool) {
       // directly onto the visible bookmarks bar; harmless where ignored.
       attr = ` PERSONAL_TOOLBAR_FOLDER="true"`
     }
-    fmt.Fprintf(w, "<DT><H3 ADD_DATE=\"%d\" LAST_MODIFIED=\"%d\"%s>%s</H3>\n",
+    ew.printf("<DT><H3 ADD_DATE=\"%d\" LAST_MODIFIED=\"%d\"%s>%s</H3>\n",
       millisToUnixSeconds(n.DateAdded), millisToUnixSeconds(n.DateModified), attr, html.EscapeString(title))
-    fmt.Fprint(w, "<DL><p>\n")
+    ew.printf("<DL><p>\n")
     for _, c := range n.Children {
-      writeNode(w, c, false)
+      writeNode(ew, c, false)
     }
-    fmt.Fprint(w, "</DL><p>\n")
+    ew.printf("</DL><p>\n")
   }
 }
 
