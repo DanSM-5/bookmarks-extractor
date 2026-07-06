@@ -8,7 +8,7 @@ import (
   "io"
   "regexp"
 
-  "bookmarks/internal/model"
+  "github.com/DanSM-5/bookmarks-extractor/internal/model"
 )
 
 // backupNode mirrors the shape of Firefox's own bookmark backup JSON (the

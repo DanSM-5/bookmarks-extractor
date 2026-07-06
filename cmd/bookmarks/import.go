@@ -11,10 +11,10 @@ import (
 
   "github.com/spf13/cobra"
 
-  "bookmarks/internal/chromium"
-  "bookmarks/internal/firefox"
-  "bookmarks/internal/model"
-  "bookmarks/internal/netscape"
+  "github.com/DanSM-5/bookmarks-extractor/internal/chromium"
+  "github.com/DanSM-5/bookmarks-extractor/internal/firefox"
+  "github.com/DanSM-5/bookmarks-extractor/internal/model"
+  "github.com/DanSM-5/bookmarks-extractor/internal/netscape"
 )
 
 func newImportCmd() *cobra.Command {

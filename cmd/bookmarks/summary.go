@@ -3,7 +3,7 @@ package main
 import (
   "fmt"
 
-  "bookmarks/internal/model"
+  "github.com/DanSM-5/bookmarks-extractor/internal/model"
 )
 
 // flatBookmark is a bookmark flattened out of the tree, for display.

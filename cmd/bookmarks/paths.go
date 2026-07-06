@@ -5,7 +5,7 @@ import (
   "os"
   "path/filepath"
 
-  "bookmarks/internal/chromium"
+  "github.com/DanSM-5/bookmarks-extractor/internal/chromium"
 )
 
 // pathKind classifies an arbitrary filesystem path passed as --browser (or

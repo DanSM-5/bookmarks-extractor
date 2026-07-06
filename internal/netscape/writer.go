@@ -12,7 +12,7 @@ import (
   "html"
   "io"
 
-  "bookmarks/internal/model"
+  "github.com/DanSM-5/bookmarks-extractor/internal/model"
 )
 
 // prettyRootTitles maps the raw internal titles Firefox stores for its

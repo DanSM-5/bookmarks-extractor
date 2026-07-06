@@ -6,7 +6,7 @@ import (
   "os"
   "strconv"
 
-  "bookmarks/internal/model"
+  "github.com/DanSM-5/bookmarks-extractor/internal/model"
 )
 
 // chromeEpochOffsetMicros is the number of microseconds between the WebKit

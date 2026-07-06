@@ -8,7 +8,7 @@ import (
 
   "github.com/google/uuid"
 
-  "bookmarks/internal/model"
+  "github.com/DanSM-5/bookmarks-extractor/internal/model"
 )
 
 // builder assembles a rawFile from a canonical model.Root, assigning

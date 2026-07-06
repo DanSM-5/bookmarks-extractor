@@ -9,7 +9,7 @@ import (
 
   _ "modernc.org/sqlite"
 
-  "bookmarks/internal/model"
+  "github.com/DanSM-5/bookmarks-extractor/internal/model"
 )
 
 // bookmarkType mirrors moz_bookmarks.type.

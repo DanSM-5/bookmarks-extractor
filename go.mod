@@ -1,4 +1,4 @@
-module bookmarks
+module github.com/DanSM-5/bookmarks-extractor
 
 go 1.25.6
 
