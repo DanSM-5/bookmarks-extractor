@@ -1,0 +1,23 @@
+{
+  "name": "bookmarks-extractor",
+  "version": "0.0.0",
+  "description": "Cross-platform CLI to export and import bookmarks from multiple browsers",
+  "main": "index.js",
+  "scripts": {
+    "bump": "npm version --tag-version-prefix=\"\"",
+    "version": "node -e \"const fs = require('fs'); fs.writeFileSync('cmd/bookmarks/version.txt', process.env.npm_new_version);\" && git add cmd/bookmarks/version.txt"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DanSM-5/bookmarks-extractor.git"
+  },
+  "keywords": [
+    "bookmarks"
+  ],
+  "author": "Daniel San",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/DanSM-5/bookmarks-extractor/issues"
+  },
+  "homepage": "https://github.com/DanSM-5/bookmarks-extractor#readme"
+}
