@@ -1,6 +1,6 @@
 {
   "name": "bookmarks-extractor",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Cross-platform CLI to export and import bookmarks from multiple browsers",
   "main": "index.js",
   "scripts": {
