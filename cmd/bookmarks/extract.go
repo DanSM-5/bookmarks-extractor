@@ -40,6 +40,21 @@ func newExtractCmd() *cobra.Command {
   cmd := &cobra.Command{
     Use:   "extract",
     Short: "Extract bookmarks from a browser profile into the canonical JSON format",
+    Long: `Reads a browser's native bookmark storage - a Chromium "Bookmarks" JSON file, or a
+Firefox/LibreWolf places.sqlite database - and converts it into a common JSON format that
+"bookmarks import" can later read.
+
+--browser accepts either a recognized name (firefox, librewolf, chrome, chromium, brave, edge)
+or a path: a Bookmarks file, a places.sqlite file, a profile directory, or a user-data/profiles
+root containing multiple profiles. The bookmark-store layout is auto-detected from the path.
+
+--profile accepts a directory name (e.g. "Default", "Profile 1"), a display name shown in the
+browser's own profile picker (e.g. "Eduardo Sanchez"), or a Firefox profiles.ini profile name.
+Run with --list-profiles first if you're not sure what's available.`,
+    Example: `  bookmarks extract --browser chrome -o bookmarks.json
+  bookmarks extract --browser firefox --profile default-release --dry-run
+  bookmarks extract --browser chrome --list-profiles
+  bookmarks extract --browser /path/to/custom/profile -o out.json`,
     RunE: func(cmd *cobra.Command, args []string) error {
       if listProfiles {
         return runListProfiles(browser)
@@ -51,7 +66,7 @@ func newExtractCmd() *cobra.Command {
   cmd.Flags().StringVar(&browser, "browser", "",
     "browser to extract from: firefox, librewolf, chrome, chromium, brave, edge, "+
       "or a path to a custom install/profile location (required)")
-  cmd.Flags().StringVar(&profile, "profile", "", "profile name (chromium: directory or display name, e.g. \"Default\" or \"Eduardo Sanchez\"; firefox: profile name from profiles.ini). Defaults to the browser's default profile")
+  cmd.Flags().StringVar(&profile, "profile", "", "profile: directory name, display name, or profiles.ini name (see --list-profiles). Defaults to the browser's default profile")
   cmd.Flags().StringVarP(&output, "output", "o", "", "output file path (defaults to stdout)")
   cmd.Flags().BoolVar(&listProfiles, "list-profiles", false, "list available profiles for --browser and exit")
   cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would be read and written, without writing anything")

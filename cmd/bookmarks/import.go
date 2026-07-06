@@ -29,6 +29,30 @@ func newImportCmd() *cobra.Command {
   cmd := &cobra.Command{
     Use:   "import",
     Short: "Import canonical bookmarks JSON into a browser profile",
+    Long: `Converts the canonical JSON produced by "bookmarks extract" into whatever a target
+browser can actually load, and explains how to load it.
+
+By default this generates a Netscape-format HTML file and prints instructions for the browser's
+own bookmark-import feature - a safe, non-destructive merge that adds a new folder alongside
+whatever bookmarks are already there.
+
+Pass --replace to instead overwrite the target's ENTIRE bookmark tree:
+  - Chromium-family targets (chrome/chromium/brave/edge): writes the Bookmarks file directly
+    (the existing file is backed up first, and you'll be asked to confirm unless --yes is set).
+  - Firefox-family targets (firefox/librewolf): Firefox has no safe way to write its bookmark
+    database directly (it relies on custom SQLite functions only Firefox's own process
+    registers), so --replace instead generates a full-tree backup file for Firefox's own
+    Restore feature - still a manual step, but one that preserves toolbar/menu/other placement,
+    unlike the default HTML merge.
+
+--browser accepts a recognized name or a path, same as "bookmarks extract" - see
+"bookmarks extract --help" for details.
+
+Use --dry-run to preview the target, any conversion warnings, and a bookmark summary without
+writing, backing up, or prompting for anything.`,
+    Example: `  bookmarks import --browser chrome --profile test --input bookmarks.json
+  bookmarks import --browser firefox --input bookmarks.json --replace
+  bookmarks import --browser edge --input bookmarks.json --replace --dry-run`,
     RunE: func(cmd *cobra.Command, args []string) error {
       return runImport(browser, profile, input, output, yes, replace, dryRun)
     },
@@ -38,17 +62,13 @@ func newImportCmd() *cobra.Command {
     "target browser: firefox, librewolf, chrome, chromium, brave, edge, "+
       "or a path to a custom install/profile location (required)")
   cmd.Flags().StringVar(&profile, "profile", "",
-    "target profile (chromium: directory or display name, e.g. \"Default\" or \"Eduardo Sanchez\"; ignored for firefox-family targets). Defaults to \"Default\"")
+    "target profile: directory name or display name (ignored for firefox-family targets). Defaults to \"Default\"")
   cmd.Flags().StringVar(&input, "input", "", "canonical bookmarks JSON file to import (required)")
   cmd.Flags().StringVarP(&output, "output", "o", "",
     "where to write the generated file for manual import/restore (defaults next to --input)")
   cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip the confirmation prompt when --replace targets a chromium-family browser")
   cmd.Flags().BoolVar(&replace, "replace", false,
-    "replace ALL of the target's bookmarks instead of generating a file to merge in manually. "+
-      "For chromium-family targets this writes the Bookmarks file directly (with a backup and confirmation). "+
-      "Firefox has no safe direct-write path either way, so this only changes which file is generated: "+
-      "a full-tree backup for its Restore feature (replaces everything) instead of an HTML file for its "+
-      "merge-style HTML import.")
+    "replace ALL of the target's bookmarks directly instead of generating a file to merge in manually (see below)")
   cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would happen (target, warnings, summary), without writing, backing up, or prompting")
   cmd.MarkFlagRequired("browser")
   cmd.MarkFlagRequired("input")
