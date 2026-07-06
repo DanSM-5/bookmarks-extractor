@@ -4,7 +4,6 @@
   "description": "Cross-platform CLI to export and import bookmarks from multiple browsers",
   "main": "index.js",
   "scripts": {
-    "bump": "npm version --tag-version-prefix=\"\"",
     "version": "node -e \"const fs = require('fs'); fs.writeFileSync('cmd/bookmarks/version.txt', process.env.npm_new_version);\" && git add cmd/bookmarks/version.txt"
   },
   "repository": {
