@@ -35,6 +35,7 @@ func newExtractCmd() *cobra.Command {
   var profile string
   var output string
   var listProfiles bool
+  var dryRun bool
 
   cmd := &cobra.Command{
     Use:   "extract",
@@ -43,7 +44,7 @@ func newExtractCmd() *cobra.Command {
       if listProfiles {
         return runListProfiles(browser)
       }
-      return runExtract(browser, profile, output)
+      return runExtract(browser, profile, output, dryRun)
     },
   }
 
@@ -53,6 +54,7 @@ func newExtractCmd() *cobra.Command {
   cmd.Flags().StringVar(&profile, "profile", "", "profile name (chromium: directory or display name, e.g. \"Default\" or \"Eduardo Sanchez\"; firefox: profile name from profiles.ini). Defaults to the browser's default profile")
   cmd.Flags().StringVarP(&output, "output", "o", "", "output file path (defaults to stdout)")
   cmd.Flags().BoolVar(&listProfiles, "list-profiles", false, "list available profiles for --browser and exit")
+  cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would be read and written, without writing anything")
   cmd.MarkFlagRequired("browser")
 
   return cmd
@@ -119,23 +121,59 @@ func printChromiumProfiles(profiles []chromium.ProfileInfo) {
   }
 }
 
-func runExtract(browser, profile, output string) error {
+func runExtract(browser, profile, output string, dryRun bool) error {
   var root *model.Root
+  var readPath string
   var err error
 
   switch {
   case firefoxBrowsers[browser] != "":
-    root, err = extractFirefox(firefoxBrowsers[browser], profile)
+    root, readPath, err = extractFirefox(firefoxBrowsers[browser], profile)
   case chromiumBrowsers[browser] != "":
-    if profile == "" {
-      profile = "Default"
+    p := profile
+    if p == "" {
+      p = "Default"
     }
-    root, err = chromium.Read(chromiumBrowsers[browser], profile)
+    b := chromiumBrowsers[browser]
+    var dir string
+    dir, err = chromium.UserDataDir(b)
+    if err == nil {
+      readPath, err = chromium.ResolvePathAt(dir, p)
+    }
+    if err == nil {
+      root, err = chromium.ReadFile(readPath)
+    }
+    if err == nil {
+      root.Source = string(b)
+      root.Profile = p
+    }
   default:
-    root, err = extractFromPath(browser, profile)
+    root, readPath, err = extractFromPath(browser, profile)
   }
   if err != nil {
     return err
+  }
+
+  if dryRun {
+    dryRunHeader()
+    fmt.Printf("Browser:       %s\n", browser)
+    if profile != "" {
+      fmt.Printf("Profile:       %s\n", profile)
+    }
+    if root.Profile != "" && root.Profile != profile {
+      fmt.Printf("Resolved to:   %s\n", root.Profile)
+    }
+    fmt.Printf("Source format: %s\n", root.Format)
+    fmt.Printf("Reading from:  %s\n", readPath)
+    fmt.Println()
+    printBookmarkSummary(root)
+    fmt.Println()
+    if output == "" {
+      fmt.Println("Would write to: stdout")
+    } else {
+      fmt.Printf("Would write to: %s\n", output)
+    }
+    return nil
   }
 
   data, err := json.MarshalIndent(root, "", "  ")
@@ -151,12 +189,12 @@ func runExtract(browser, profile, output string) error {
   return os.WriteFile(output, data, 0o644)
 }
 
-func extractFirefox(product firefox.Product, profile string) (*model.Root, error) {
+func extractFirefox(product firefox.Product, profile string) (*model.Root, string, error) {
   var profilePath string
   if profile == "" {
     p, err := firefox.DefaultProfile(product)
     if err != nil {
-      return nil, err
+      return nil, "", err
     }
     profilePath = p.Path
   } else {
@@ -173,60 +211,64 @@ func extractFirefox(product firefox.Product, profile string) (*model.Root, error
       profilePath = profile
     }
   }
-  return firefox.Read(product, profilePath)
+  root, err := firefox.Read(product, profilePath)
+  return root, filepath.Join(profilePath, "places.sqlite"), err
 }
 
 // extractFromPath handles --browser values that aren't a recognized name:
 // it treats the value as a filesystem path and auto-detects whether it's a
 // Chromium Bookmarks file/profile/user-data-root or a Firefox
-// places.sqlite/profile/profiles.ini-root.
-func extractFromPath(path, profile string) (*model.Root, error) {
+// places.sqlite/profile/profiles.ini-root. It returns the resolved root
+// plus the exact file path that was (or would be) read from.
+func extractFromPath(path, profile string) (*model.Root, string, error) {
   kind, err := classifyPath(path)
   if err != nil {
-    return nil, err
+    return nil, "", err
   }
 
   switch kind {
   case kindChromiumFile:
     root, err := chromium.ReadFile(path)
     if err != nil {
-      return nil, err
+      return nil, "", err
     }
-    return withCustomSource(root, filepath.Dir(path)), nil
+    return withCustomSource(root, filepath.Dir(path)), path, nil
 
   case kindFirefoxFile:
     root, err := firefox.ReadProfile(filepath.Dir(path))
     if err != nil {
-      return nil, err
+      return nil, "", err
     }
-    return withCustomSource(root, filepath.Dir(path)), nil
+    return withCustomSource(root, filepath.Dir(path)), path, nil
 
   case kindFirefoxProfileDir:
     root, err := firefox.ReadProfile(path)
+    readPath := filepath.Join(path, "places.sqlite")
     if err != nil {
-      return nil, err
+      return nil, readPath, err
     }
-    return withCustomSource(root, path), nil
+    return withCustomSource(root, path), readPath, nil
 
   case kindChromiumProfileDir:
-    root, err := chromium.ReadFile(filepath.Join(path, "Bookmarks"))
+    readPath := filepath.Join(path, "Bookmarks")
+    root, err := chromium.ReadFile(readPath)
     if err != nil {
-      return nil, err
+      return nil, readPath, err
     }
-    return withCustomSource(root, path), nil
+    return withCustomSource(root, path), readPath, nil
 
   case kindFirefoxRoot:
     var profilePath string
     if profile == "" {
       p, err := firefox.DefaultProfileAt(path)
       if err != nil {
-        return nil, err
+        return nil, "", err
       }
       profilePath = p.Path
     } else {
       profiles, err := firefox.ListProfilesAt(path)
       if err != nil {
-        return nil, err
+        return nil, "", err
       }
       for _, p := range profiles {
         if p.Name == profile {
@@ -238,11 +280,12 @@ func extractFromPath(path, profile string) (*model.Root, error) {
         profilePath = filepath.Join(path, profile)
       }
     }
+    readPath := filepath.Join(profilePath, "places.sqlite")
     root, err := firefox.ReadProfile(profilePath)
     if err != nil {
-      return nil, err
+      return nil, readPath, err
     }
-    return withCustomSource(root, profilePath), nil
+    return withCustomSource(root, profilePath), readPath, nil
 
   case kindChromiumRoot:
     p := profile
@@ -251,16 +294,16 @@ func extractFromPath(path, profile string) (*model.Root, error) {
     }
     resolvedPath, err := chromium.ResolvePathAt(path, p)
     if err != nil {
-      return nil, err
+      return nil, "", err
     }
     root, err := chromium.ReadFile(resolvedPath)
     if err != nil {
-      return nil, err
+      return nil, resolvedPath, err
     }
-    return withCustomSource(root, filepath.Dir(resolvedPath)), nil
+    return withCustomSource(root, filepath.Dir(resolvedPath)), resolvedPath, nil
   }
 
-  return nil, fmt.Errorf("could not detect a bookmarks store under %q", path)
+  return nil, "", fmt.Errorf("could not detect a bookmarks store under %q", path)
 }
 
 func withCustomSource(root *model.Root, profilePath string) *model.Root {

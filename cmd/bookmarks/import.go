@@ -24,12 +24,13 @@ func newImportCmd() *cobra.Command {
   var output string
   var yes bool
   var replace bool
+  var dryRun bool
 
   cmd := &cobra.Command{
     Use:   "import",
     Short: "Import canonical bookmarks JSON into a browser profile",
     RunE: func(cmd *cobra.Command, args []string) error {
-      return runImport(browser, profile, input, output, yes, replace)
+      return runImport(browser, profile, input, output, yes, replace, dryRun)
     },
   }
 
@@ -48,13 +49,14 @@ func newImportCmd() *cobra.Command {
       "Firefox has no safe direct-write path either way, so this only changes which file is generated: "+
       "a full-tree backup for its Restore feature (replaces everything) instead of an HTML file for its "+
       "merge-style HTML import.")
+  cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would happen (target, warnings, summary), without writing, backing up, or prompting")
   cmd.MarkFlagRequired("browser")
   cmd.MarkFlagRequired("input")
 
   return cmd
 }
 
-func runImport(browser, profile, input, output string, yes, replace bool) error {
+func runImport(browser, profile, input, output string, yes, replace, dryRun bool) error {
   data, err := os.ReadFile(input)
   if err != nil {
     return fmt.Errorf("reading %q: %w", input, err)
@@ -66,13 +68,13 @@ func runImport(browser, profile, input, output string, yes, replace bool) error 
 
   if _, ok := firefoxBrowsers[browser]; ok {
     if replace {
-      return importIntoFirefoxReplace(browser, &root, input, output)
+      return importIntoFirefoxReplace(browser, &root, input, output, dryRun)
     }
-    return importIntoFirefoxMerge(browser, &root, input, output)
+    return importIntoFirefoxMerge(browser, &root, input, output, dryRun)
   }
   if b, ok := chromiumBrowsers[browser]; ok {
     if !replace {
-      return importIntoChromiumMerge(browser, &root, input, output)
+      return importIntoChromiumMerge(browser, &root, input, output, dryRun)
     }
     p := profile
     if p == "" {
@@ -82,14 +84,14 @@ func runImport(browser, profile, input, output string, yes, replace bool) error 
     if err != nil {
       return err
     }
-    return importIntoChromiumReplace(&root, path, yes)
+    return importIntoChromiumReplace(&root, path, input, yes, dryRun)
   }
-  return importIntoPath(browser, profile, &root, input, output, yes, replace)
+  return importIntoPath(browser, profile, &root, input, output, yes, replace, dryRun)
 }
 
 // importIntoPath handles --browser values that aren't a recognized name by
 // auto-detecting the bookmark-store layout, mirroring extractFromPath.
-func importIntoPath(path, profile string, root *model.Root, input, output string, yes, replace bool) error {
+func importIntoPath(path, profile string, root *model.Root, input, output string, yes, replace, dryRun bool) error {
   kind, err := classifyPath(path)
   if err != nil {
     return err
@@ -98,17 +100,17 @@ func importIntoPath(path, profile string, root *model.Root, input, output string
   switch kind {
   case kindChromiumFile:
     if !replace {
-      return importIntoChromiumMerge("chromium", root, input, output)
+      return importIntoChromiumMerge("chromium", root, input, output, dryRun)
     }
-    return importIntoChromiumReplace(root, path, yes)
+    return importIntoChromiumReplace(root, path, input, yes, dryRun)
   case kindChromiumProfileDir:
     if !replace {
-      return importIntoChromiumMerge("chromium", root, input, output)
+      return importIntoChromiumMerge("chromium", root, input, output, dryRun)
     }
-    return importIntoChromiumReplace(root, filepath.Join(path, "Bookmarks"), yes)
+    return importIntoChromiumReplace(root, filepath.Join(path, "Bookmarks"), input, yes, dryRun)
   case kindChromiumRoot:
     if !replace {
-      return importIntoChromiumMerge("chromium", root, input, output)
+      return importIntoChromiumMerge("chromium", root, input, output, dryRun)
     }
     p := profile
     if p == "" {
@@ -118,20 +120,44 @@ func importIntoPath(path, profile string, root *model.Root, input, output string
     if err != nil {
       return err
     }
-    return importIntoChromiumReplace(root, resolvedPath, yes)
+    return importIntoChromiumReplace(root, resolvedPath, input, yes, dryRun)
   case kindFirefoxFile, kindFirefoxProfileDir, kindFirefoxRoot:
     if replace {
-      return importIntoFirefoxReplace("firefox", root, input, output)
+      return importIntoFirefoxReplace("firefox", root, input, output, dryRun)
     }
-    return importIntoFirefoxMerge("firefox", root, input, output)
+    return importIntoFirefoxMerge("firefox", root, input, output, dryRun)
   }
   return fmt.Errorf("could not detect a bookmarks store under %q to import into", path)
+}
+
+func printImportDryRunHeader(target, input string, root *model.Root) {
+  dryRunHeader()
+  fmt.Printf("Target:        %s\n", target)
+  fmt.Printf("Reading from:  %s\n", input)
+  fmt.Println()
+  printBookmarkSummary(root)
+  fmt.Println()
 }
 
 // importIntoChromiumReplace overwrites the Chromium "Bookmarks" file at
 // path with root's contents, after confirming with the user and backing up
 // whatever was already there.
-func importIntoChromiumReplace(root *model.Root, path string, yes bool) error {
+func importIntoChromiumReplace(root *model.Root, path, input string, yes, dryRun bool) error {
+  if dryRun {
+    printImportDryRunHeader(path, input, root)
+    _, warnings := chromium.BuildFile(root)
+    for _, w := range warnings {
+      fmt.Printf("warning: %s\n", w)
+    }
+    fmt.Println("Action: REPLACE - would overwrite the file above directly.")
+    if fileExists(path) {
+      fmt.Println("A backup of the existing file would be made first.")
+    } else {
+      fmt.Println("No existing file at that path - nothing to back up.")
+    }
+    return nil
+  }
+
   if !yes {
     ok, err := confirm(fmt.Sprintf(
       "This will REPLACE all bookmarks at:\n  %s\n\n"+
@@ -172,8 +198,17 @@ func importIntoChromiumReplace(root *model.Root, path string, yes bool) error {
 // user at the browser's own "Import bookmarks" feature, which adds the
 // imported bookmarks into a new folder without touching what's already
 // there.
-func importIntoChromiumMerge(name string, root *model.Root, input, output string) error {
-  path, err := writeHTMLFile(root, input, output)
+func importIntoChromiumMerge(name string, root *model.Root, input, output string, dryRun bool) error {
+  outPath := resolveHTMLOutputPath(input, output)
+  if dryRun {
+    printImportDryRunHeader(fmt.Sprintf("%s (via Import bookmarks - merge)", capitalize(name)), input, root)
+    fmt.Printf("Action: MERGE - would write a Netscape bookmarks file to:\n  %s\n", outPath)
+    fmt.Println("No existing bookmarks would be touched by this tool; merging happens when you use")
+    fmt.Println("the browser's own \"Import bookmarks\" feature on that file.")
+    return nil
+  }
+
+  path, err := writeHTMLFile(root, outPath)
   if err != nil {
     return err
   }
@@ -194,13 +229,27 @@ func importIntoChromiumMerge(name string, root *model.Root, input, output string
 // internal/firefox/backup.go). Restoring from this format replaces the
 // browser's entire bookmark tree, but - unlike the merge-style HTML import
 // - preserves toolbar/menu/other placement.
-func importIntoFirefoxReplace(name string, root *model.Root, input, output string) error {
-  if output == "" {
-    output = strings.TrimSuffix(input, filepath.Ext(input)) + ".json"
+func importIntoFirefoxReplace(name string, root *model.Root, input, output string, dryRun bool) error {
+  outPath := output
+  if outPath == "" {
+    outPath = strings.TrimSuffix(input, filepath.Ext(input)) + ".json"
   }
-  f, err := os.Create(output)
+
+  if dryRun {
+    printImportDryRunHeader(fmt.Sprintf("%s (via Restore - replace)", capitalize(name)), input, root)
+    _, warnings := firefox.BuildBackup(root)
+    for _, w := range warnings {
+      fmt.Printf("warning: %s\n", w)
+    }
+    fmt.Printf("Action: REPLACE - would write a bookmarks backup file to:\n  %s\n", outPath)
+    fmt.Println("Restoring that file in the browser replaces its entire bookmark tree; nothing is")
+    fmt.Println("touched until you do that manually.")
+    return nil
+  }
+
+  f, err := os.Create(outPath)
   if err != nil {
-    return fmt.Errorf("creating %q: %w", output, err)
+    return fmt.Errorf("creating %q: %w", outPath, err)
   }
   defer f.Close()
   warnings, err := firefox.WriteBackup(root, f)
@@ -211,14 +260,14 @@ func importIntoFirefoxReplace(name string, root *model.Root, input, output strin
     return err
   }
 
-  fmt.Printf("Wrote a bookmarks backup file to %s\n", output)
+  fmt.Printf("Wrote a bookmarks backup file to %s\n", outPath)
   fmt.Println()
   fmt.Printf("%s stores bookmarks in a live SQLite database with internal bookkeeping (custom\n", capitalize(name))
   fmt.Println("SQL functions, generated columns, shared history data) this tool can't safely replicate,")
   fmt.Println("so it can't be written directly. To finish the import:")
   fmt.Println("  1. Open the browser and go to the Bookmarks Library (Ctrl+Shift+O / Cmd+Shift+O).")
   fmt.Println("  2. Library > Import and Backup > Restore > Choose File...")
-  fmt.Printf("  3. Select %s\n", output)
+  fmt.Printf("  3. Select %s\n", outPath)
   fmt.Println()
   fmt.Println("Note: this REPLACES the browser's entire bookmark tree. Back up existing bookmarks first")
   fmt.Println("if you want to keep them (Library > Import and Backup > Backup...).")
@@ -230,8 +279,17 @@ func importIntoFirefoxReplace(name string, root *model.Root, input, output strin
 // Menu instead of replacing anything - see the docstring on
 // internal/firefox/backup.go for why this doesn't preserve toolbar
 // placement the way importIntoFirefoxReplace does.
-func importIntoFirefoxMerge(name string, root *model.Root, input, output string) error {
-  path, err := writeHTMLFile(root, input, output)
+func importIntoFirefoxMerge(name string, root *model.Root, input, output string, dryRun bool) error {
+  outPath := resolveHTMLOutputPath(input, output)
+  if dryRun {
+    printImportDryRunHeader(fmt.Sprintf("%s (via Import Bookmarks from HTML File - merge)", capitalize(name)), input, root)
+    fmt.Printf("Action: MERGE - would write a Netscape bookmarks file to:\n  %s\n", outPath)
+    fmt.Println("No existing bookmarks would be touched by this tool; merging happens when you use")
+    fmt.Println("the browser's own HTML importer on that file (everything lands under Bookmarks Menu).")
+    return nil
+  }
+
+  path, err := writeHTMLFile(root, outPath)
   if err != nil {
     return err
   }
@@ -250,20 +308,24 @@ func importIntoFirefoxMerge(name string, root *model.Root, input, output string)
   return nil
 }
 
-func writeHTMLFile(root *model.Root, input, output string) (string, error) {
-  if output == "" {
-    output = strings.TrimSuffix(input, filepath.Ext(input)) + ".html"
+func resolveHTMLOutputPath(input, output string) string {
+  if output != "" {
+    return output
   }
-  f, err := os.Create(output)
+  return strings.TrimSuffix(input, filepath.Ext(input)) + ".html"
+}
+
+func writeHTMLFile(root *model.Root, outPath string) (string, error) {
+  f, err := os.Create(outPath)
   if err != nil {
-    return "", fmt.Errorf("creating %q: %w", output, err)
+    return "", fmt.Errorf("creating %q: %w", outPath, err)
   }
   defer f.Close()
   if err := netscape.Write(root, f); err != nil {
     return "", err
   }
-  fmt.Printf("Wrote a Netscape bookmarks file to %s\n", output)
-  return output, nil
+  fmt.Printf("Wrote a Netscape bookmarks file to %s\n", outPath)
+  return outPath, nil
 }
 
 func confirm(prompt string) (bool, error) {
